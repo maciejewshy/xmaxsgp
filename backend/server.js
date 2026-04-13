@@ -643,7 +643,12 @@ async function processDispatch(isSimulation = false, ruleId = null, clientId = n
                                     }
                                 }
 
-                                const vencimentoFormatado = tituloObj && tituloObj.dataVencimento ? tituloObj.dataVencimento.split('-').reverse().join('/') : targetDate.split('-').reverse().join('/');
+                                const rawDate = tituloObj ? (tituloObj.dataVencimento || tituloObj.data_vencimento || tituloObj.vencimento) : null;
+                                let vencimentoFormatado = targetDate.split('-').reverse().join('/');
+                                if (rawDate && typeof rawDate === 'string' && rawDate.includes('-')) {
+                                    vencimentoFormatado = rawDate.split('-').reverse().join('/');
+                                }
+                                
                                 const linhaDigitavel = tituloObj ? (tituloObj.linhaDigitavel || tituloObj.codigoBarras || '') : '';
                                 const linkBoleto = tituloObj ? (tituloObj.link || '') : '';
                                 const pix = tituloObj ? (tituloObj.codigoPix || '') : '';
@@ -662,12 +667,25 @@ async function processDispatch(isSimulation = false, ruleId = null, clientId = n
                                     if (msg.template_data) {
                                         const vars = msg.template_data.split(',');
                                         dataArray = vars.map(v => {
-                                            return v.trim()
+                                            let val = v.trim();
+                                            // Permite variáveis com ou sem chaves e variações de nome
+                                            if (val === 'nome' || val === '{nome}') return nome;
+                                            if (val === 'cpf' || val === '{cpf}') return cpf;
+                                            if (val === 'vencimento' || val === '{vencimento}' || val === 'data' || val === '{data}') return vencimentoFormatado;
+                                            if (val === 'linha_digitavel' || val === '{linha_digitavel}') return linhaDigitavel;
+                                            if (val === 'link_boleto' || val === '{link_boleto}' || val === 'link' || val === '{link}') return linkBoleto;
+                                            if (val === 'valor' || val === '{valor}') return valorStr;
+                                            if (val === 'pix' || val === '{pix}') return pix;
+                                            
+                                            // Fallback para textos mistos
+                                            return val
                                                 .replace(/{nome}/g, nome)
                                                 .replace(/{cpf}/g, cpf)
                                                 .replace(/{vencimento}/g, vencimentoFormatado)
+                                                .replace(/{data}/g, vencimentoFormatado)
                                                 .replace(/{linha_digitavel}/g, linhaDigitavel)
                                                 .replace(/{link_boleto}/g, linkBoleto)
+                                                .replace(/{link}/g, linkBoleto)
                                                 .replace(/{valor}/g, valorStr)
                                                 .replace(/{pix}/g, pix);
                                         });
