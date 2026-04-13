@@ -22,6 +22,9 @@ const db = new sqlite3.Database(dbPath, (err) => {
         db.run('ALTER TABLE clients ADD COLUMN sgp_url TEXT', (err) => {});
         db.run('ALTER TABLE clients ADD COLUMN sgp_token TEXT', (err) => {});
         db.run('ALTER TABLE dispatch_messages ADD COLUMN queue_api_key TEXT', (err) => {});
+        db.run('ALTER TABLE dispatch_messages ADD COLUMN message_type TEXT DEFAULT "unofficial"', (err) => {});
+        db.run('ALTER TABLE dispatch_messages ADD COLUMN template_id TEXT', (err) => {});
+        db.run('ALTER TABLE dispatch_messages ADD COLUMN template_data TEXT', (err) => {});
 
         db.run(`
             CREATE TABLE IF NOT EXISTS dispatch_messages (

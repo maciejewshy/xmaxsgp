@@ -27,7 +27,10 @@ function ClientDashboard({ user, onLogout }) {
   const [messages, setMessages] = useState([]);
   const [editingMsgId, setEditingMsgId] = useState(null);
   const [msgFormData, setMsgFormData] = useState({
+    message_type: 'unofficial',
     message_template: '',
+    template_id: '',
+    template_data: '',
     days_from_due: 0,
     queue_id: '',
     queue_api_key: ''
@@ -190,7 +193,7 @@ function ClientDashboard({ user, onLogout }) {
       } else {
         await axios.post(`${MSG_API_URL}/clients/${user.client_id}/messages`, msgFormData);
       }
-      setMsgFormData({ message_template: '', days_from_due: 0, queue_id: '', queue_api_key: '' });
+      setMsgFormData({ message_type: 'unofficial', message_template: '', template_id: '', template_data: '', days_from_due: 0, queue_id: '', queue_api_key: '' });
       setEditingMsgId(null);
       fetchMessages();
     } catch (error) {
@@ -199,7 +202,12 @@ function ClientDashboard({ user, onLogout }) {
   };
 
   const handleMsgEdit = (msg) => {
-    setMsgFormData(msg);
+    setMsgFormData({
+      ...msg,
+      message_type: msg.message_type || 'unofficial',
+      template_id: msg.template_id || '',
+      template_data: msg.template_data || ''
+    });
     setEditingMsgId(msg.id);
   };
 
@@ -457,12 +465,35 @@ function ClientDashboard({ user, onLogout }) {
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label style={{ fontWeight: 600 }}>Mensagem de Envio:</label>
-                  <textarea name="message_template" value={msgFormData.message_template} onChange={handleMsgInputChange} rows="4" required style={{ resize: 'vertical', width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #e5e7eb', boxSizing: 'border-box' }} />
-                  <small style={{color: '#6b7280', fontSize: '12px', display: 'block', marginTop: '4px'}}>
-                    <b>Variáveis Suportadas:</b> {`{nome}, {cpf}, {vencimento}, {valor}, {link_boleto}, {pix}, {linha_digitavel}`}
-                  </small>
+                  <label style={{ fontWeight: 600 }}>Tipo de Mensagem:</label>
+                  <select name="message_type" value={msgFormData.message_type} onChange={handleMsgInputChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #e5e7eb' }}>
+                    <option value="unofficial">Não Oficial (Texto Livre)</option>
+                    <option value="official">Oficial (Template META)</option>
+                  </select>
                 </div>
+
+                {msgFormData.message_type === 'unofficial' ? (
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label style={{ fontWeight: 600 }}>Mensagem de Envio:</label>
+                    <textarea name="message_template" value={msgFormData.message_template} onChange={handleMsgInputChange} rows="4" required={msgFormData.message_type === 'unofficial'} style={{ resize: 'vertical', width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #e5e7eb', boxSizing: 'border-box' }} />
+                    <small style={{color: '#6b7280', fontSize: '12px', display: 'block', marginTop: '4px'}}>
+                      <b>Variáveis Suportadas:</b> {`{nome}, {cpf}, {vencimento}, {valor}, {link_boleto}, {pix}, {linha_digitavel}`}
+                    </small>
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '1.5rem', alignItems: 'start' }}>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label style={{ fontWeight: 600 }}>ID do Template:</label>
+                      <input type="number" name="template_id" value={msgFormData.template_id} onChange={handleMsgInputChange} required={msgFormData.message_type === 'official'} style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #e5e7eb' }} />
+                      <small style={{color: '#6b7280', fontSize: '11px', display: 'block', marginTop: '4px'}}>Ex: 62</small>
+                    </div>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label style={{ fontWeight: 600 }}>Variáveis do Template (separadas por vírgula):</label>
+                      <input type="text" name="template_data" value={msgFormData.template_data} onChange={handleMsgInputChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #e5e7eb' }} />
+                      <small style={{color: '#6b7280', fontSize: '11px', display: 'block', marginTop: '4px'}}>Ex: {`{nome},{valor}`} (Deixe em branco se o template não tiver variáveis)</small>
+                    </div>
+                  </div>
+                )}
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem', alignItems: 'start' }}>
                   <div className="form-group" style={{ marginBottom: 0 }}>
@@ -527,7 +558,13 @@ function ClientDashboard({ user, onLogout }) {
                           {msg.days_from_due < 0 ? 'A Vencer' : msg.days_from_due === 0 ? 'Vencendo Hoje' : 'Vencida'}
                         </span>
                       </td>
-                      <td style={{ maxWidth: '400px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{msg.message_template}</td>
+                      <td style={{ maxWidth: '400px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {msg.message_type === 'official' ? (
+                          <span style={{color: '#2563eb', fontWeight: 500}}>[Oficial] TPL {msg.template_id}: {msg.template_data}</span>
+                        ) : (
+                          msg.message_template
+                        )}
+                      </td>
                       <td className="table-actions" style={{ justifyContent: 'flex-end' }}>
                         <button className="btn-icon text-blue" onClick={() => { setMsgFormData(msg); setEditingMsgId(msg.id); }} title="Editar">
                           <Edit2 size={18} />

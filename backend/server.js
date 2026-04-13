@@ -122,25 +122,25 @@ app.get('/api/clients/:clientId/messages', (req, res) => {
 });
 
 app.post('/api/clients/:clientId/messages', (req, res) => {
-    const { message_template, days_from_due, queue_id, queue_api_key } = req.body;
+    const { message_template, days_from_due, queue_id, queue_api_key, message_type, template_id, template_data } = req.body;
     const query = `
-        INSERT INTO dispatch_messages (client_id, message_template, days_from_due, queue_id, queue_api_key)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO dispatch_messages (client_id, message_template, days_from_due, queue_id, queue_api_key, message_type, template_id, template_data)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `;
-    db.run(query, [req.params.clientId, message_template, days_from_due, queue_id, queue_api_key], function(err) {
+    db.run(query, [req.params.clientId, message_template, days_from_due, queue_id, queue_api_key, message_type || 'unofficial', template_id || null, template_data || null], function(err) {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ id: this.lastID });
     });
 });
 
 app.put('/api/messages/:id', (req, res) => {
-    const { message_template, days_from_due, queue_id, queue_api_key } = req.body;
+    const { message_template, days_from_due, queue_id, queue_api_key, message_type, template_id, template_data } = req.body;
     const query = `
         UPDATE dispatch_messages SET 
-            message_template = ?, days_from_due = ?, queue_id = ?, queue_api_key = ?
+            message_template = ?, days_from_due = ?, queue_id = ?, queue_api_key = ?, message_type = ?, template_id = ?, template_data = ?
         WHERE id = ?
     `;
-    db.run(query, [message_template, days_from_due, queue_id, queue_api_key, req.params.id], function(err) {
+    db.run(query, [message_template, days_from_due, queue_id, queue_api_key, message_type || 'unofficial', template_id || null, template_data || null, req.params.id], function(err) {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ updated: this.changes });
     });
@@ -654,14 +654,35 @@ async function processDispatch(isSimulation = false, ruleId = null, clientId = n
                                     valorStr = valorNum.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
                                 }
 
-                                let messageText = msg.message_template
-                                    .replace(/{nome}/g, nome)
-                                    .replace(/{cpf}/g, cpf)
-                                    .replace(/{vencimento}/g, vencimentoFormatado)
-                                    .replace(/{linha_digitavel}/g, linhaDigitavel)
-                                    .replace(/{link_boleto}/g, linkBoleto)
-                                    .replace(/{valor}/g, valorStr)
-                                    .replace(/{pix}/g, pix);
+                                let messageText = '';
+                                let isOfficial = msg.message_type === 'official';
+                                let dataArray = [];
+
+                                if (isOfficial) {
+                                    if (msg.template_data) {
+                                        const vars = msg.template_data.split(',');
+                                        dataArray = vars.map(v => {
+                                            return v.trim()
+                                                .replace(/{nome}/g, nome)
+                                                .replace(/{cpf}/g, cpf)
+                                                .replace(/{vencimento}/g, vencimentoFormatado)
+                                                .replace(/{linha_digitavel}/g, linhaDigitavel)
+                                                .replace(/{link_boleto}/g, linkBoleto)
+                                                .replace(/{valor}/g, valorStr)
+                                                .replace(/{pix}/g, pix);
+                                        });
+                                    }
+                                    messageText = `Template ID: ${msg.template_id} - Parâmetros: ${dataArray.join(', ')}`;
+                                } else {
+                                    messageText = (msg.message_template || '')
+                                        .replace(/{nome}/g, nome)
+                                        .replace(/{cpf}/g, cpf)
+                                        .replace(/{vencimento}/g, vencimentoFormatado)
+                                        .replace(/{linha_digitavel}/g, linhaDigitavel)
+                                        .replace(/{link_boleto}/g, linkBoleto)
+                                        .replace(/{valor}/g, valorStr)
+                                        .replace(/{pix}/g, pix);
+                                }
 
                                 if (isSimulation) {
                                     simulationData.push({
@@ -686,25 +707,40 @@ async function processDispatch(isSimulation = false, ruleId = null, clientId = n
                                         let currentPayload = null;
                                         try {
                                             const finalPhone = testPhoneOverride ? testPhoneOverride : telefoneLimpoFinal;
-                                            const payload = {
-                                                queueId: parseInt(msg.queue_id, 10),
-                                                apiKey: msg.queue_api_key,
-                                                number: finalPhone,
-                                                text: messageText,
-                                                campaignName: `SGP - ${filterType} (${days} dias)${testPhoneOverride ? ' (TESTE)' : ''}`,
-                                                extData: "SGP",
-                                                extFlag: 0,
-                                                hidden: false
-                                            };
-                                            currentPayload = payload;
                                             
-                                            // Remover barra extra no final da URL se houver para evitar //int/...
+                                            // Remover barra extra no final da URL se houver
                                             const baseAtenderBemUrl = client.atenderbem_link.endsWith('/') ? client.atenderbem_link.slice(0, -1) : client.atenderbem_link;
-                                            const apiUrl = `${baseAtenderBemUrl}/int/enqueueMessageToSend`;
-                                            logStep(`   -> [API DISPARO] Enviando POST para: ${apiUrl}`);
-                                            logStep(`   -> [PAYLOAD] ${JSON.stringify(payload)}`);
+                                            let apiUrl = '';
 
-                                            const response = await axios.post(apiUrl, payload, {
+                                            if (isOfficial) {
+                                                apiUrl = `${baseAtenderBemUrl}/int/sendWaTemplate`;
+                                                currentPayload = {
+                                                    queueId: parseInt(msg.queue_id, 10),
+                                                    apiKey: msg.queue_api_key,
+                                                    number: finalPhone,
+                                                    templateId: parseInt(msg.template_id, 10),
+                                                    data: dataArray,
+                                                    cancelIfAlreadyOpen: false,
+                                                    openNewChat: true
+                                                };
+                                            } else {
+                                                apiUrl = `${baseAtenderBemUrl}/int/enqueueMessageToSend`;
+                                                currentPayload = {
+                                                    queueId: parseInt(msg.queue_id, 10),
+                                                    apiKey: msg.queue_api_key,
+                                                    number: finalPhone,
+                                                    text: messageText,
+                                                    campaignName: `SGP - ${filterType} (${days} dias)${testPhoneOverride ? ' (TESTE)' : ''}`,
+                                                    extData: "SGP",
+                                                    extFlag: 0,
+                                                    hidden: false
+                                                };
+                                            }
+                                            
+                                            logStep(`   -> [API DISPARO] Enviando POST para: ${apiUrl}`);
+                                            logStep(`   -> [PAYLOAD] ${JSON.stringify(currentPayload)}`);
+
+                                            const response = await axios.post(apiUrl, currentPayload, {
                                                 headers: {
                                                     'Accept': 'application/json',
                                                     'Content-Type': 'application/json'
@@ -717,7 +753,7 @@ async function processDispatch(isSimulation = false, ruleId = null, clientId = n
                                             processLogs.push(`Enviado: ${client.name} - ${finalPhone} - Cliente: ${nome}`);
                                             
                                             db.run('INSERT INTO dispatch_logs (client_id, phone_number, invoice_id, message_sent, status, enqueued_id, queue_id, queue_api_key, api_request_log, api_response_log) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                                                [client.id, finalPhone, tituloId, messageText, 'Enviado', enqueuedId, msg.queue_id, msg.queue_api_key, JSON.stringify(payload), JSON.stringify(response.data)]
+                                                [client.id, finalPhone, tituloId, messageText, 'Enviado', enqueuedId, msg.queue_id, msg.queue_api_key, JSON.stringify(currentPayload), JSON.stringify(response.data)]
                                             );
                                             
                                             if (testPhoneOverride) {
