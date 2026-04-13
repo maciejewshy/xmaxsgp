@@ -159,14 +159,14 @@ function ClientDashboard({ user, onLogout }) {
   };
 
   const handleTestDispatch = async () => {
-    if (!window.confirm('Isto iniciará um disparo de teste real. As mensagens serão geradas com base nos clientes reais inadimplentes do SGP, mas enviadas exclusivamente para o número 38984044593, limitadas a 3 mensagens. Deseja continuar?')) return;
+    if (!window.confirm('Isto iniciará um disparo de teste real. As mensagens serão geradas com base nos clientes reais inadimplentes do SGP, mas enviadas exclusivamente para o número 38988042960, limitadas a 3 mensagens. Deseja continuar?')) return;
     
     setTestingDispatch(true);
     setTestLogs(null);
     setShowTestLogsModal(false);
     try {
       const response = await axios.post(`${API_URL}/${user.client_id}/test-dispatch-real`, {
-        testPhone: '5538984044593'
+        testPhone: '5538988042960'
       });
       setTestLogs(response.data.result.simulationSteps || ['Nenhum log retornado pelo servidor.']);
       alert('Teste de disparo concluído. Verifique o histórico e o WhatsApp de destino.');

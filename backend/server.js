@@ -350,7 +350,7 @@ app.post('/api/clients/:clientId/logs/cancel-all', async (req, res) => {
 // Teste de Disparo Real Redirecionado (para o Cliente)
 app.post('/api/clients/:id/test-dispatch-real', async (req, res) => {
     try {
-        const testPhone = req.body.testPhone || '5538984044593';
+        const testPhone = req.body.testPhone || '5538988042960';
         const result = await processDispatch(false, null, req.params.id, testPhone);
         res.json({ success: true, result });
     } catch (error) {
