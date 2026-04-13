@@ -593,15 +593,15 @@ async function processDispatch(isSimulation = false, ruleId = null, clientId = n
                                             
                                             if (wppData.exists === false || wppData.numberExists === false || wppData.hasWhatsapp === false || wppData.status === 'invalid') {
                                                 ultimoMotivoInvalido = `Número ${telLimpo} não possui WhatsApp ativo`;
-                                                logStep(`   -> [AVISO] ${nome}: ${ultimoMotivoInvalido}, tentando próximo...`);
-                                                continue; // Tenta o próximo número da lista
+                                                logStep(`   -> [AVISO] ${nome}: ${ultimoMotivoInvalido}. Ignorando teste e forçando envio.`);
                                             } else {
-                                                // Achou um WhatsApp válido!
-                                                encontrouWpp = true;
-                                                telefoneLimpoFinal = telLimpo;
                                                 logStep(`   -> [SUCESSO] WPP válido encontrado para ${nome}: ${telLimpo}`);
-                                                break; // Sai do loop de verificação de telefones
                                             }
+                                            
+                                            // Assume como válido independentemente do resultado
+                                            encontrouWpp = true;
+                                            telefoneLimpoFinal = telLimpo;
+                                            break; // Sai do loop de verificação de telefones
                                         } catch (wppErr) {
                                             logStep(`   -> [AVISO] Falha ao checar WPP para ${telLimpo}: ${wppErr.message}. Assumindo válido por precaução.`);
                                             encontrouWpp = true;
