@@ -122,25 +122,25 @@ app.get('/api/clients/:clientId/messages', (req, res) => {
 });
 
 app.post('/api/clients/:clientId/messages', (req, res) => {
-    const { message_template, days_from_due, queue_id, queue_api_key, message_type, template_id, template_data } = req.body;
+    const { message_template, days_from_due, queue_id, queue_api_key, message_type, template_id, template_data, open_new_chat } = req.body;
     const query = `
-        INSERT INTO dispatch_messages (client_id, message_template, days_from_due, queue_id, queue_api_key, message_type, template_id, template_data)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO dispatch_messages (client_id, message_template, days_from_due, queue_id, queue_api_key, message_type, template_id, template_data, open_new_chat)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
-    db.run(query, [req.params.clientId, message_template, days_from_due, queue_id, queue_api_key, message_type || 'unofficial', template_id || null, template_data || null], function(err) {
+    db.run(query, [req.params.clientId, message_template, days_from_due, queue_id, queue_api_key, message_type || 'unofficial', template_id || null, template_data || null, open_new_chat !== undefined ? open_new_chat : 1], function(err) {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ id: this.lastID });
     });
 });
 
 app.put('/api/messages/:id', (req, res) => {
-    const { message_template, days_from_due, queue_id, queue_api_key, message_type, template_id, template_data } = req.body;
+    const { message_template, days_from_due, queue_id, queue_api_key, message_type, template_id, template_data, open_new_chat } = req.body;
     const query = `
         UPDATE dispatch_messages SET 
-            message_template = ?, days_from_due = ?, queue_id = ?, queue_api_key = ?, message_type = ?, template_id = ?, template_data = ?
+            message_template = ?, days_from_due = ?, queue_id = ?, queue_api_key = ?, message_type = ?, template_id = ?, template_data = ?, open_new_chat = ?
         WHERE id = ?
     `;
-    db.run(query, [message_template, days_from_due, queue_id, queue_api_key, message_type || 'unofficial', template_id || null, template_data || null, req.params.id], function(err) {
+    db.run(query, [message_template, days_from_due, queue_id, queue_api_key, message_type || 'unofficial', template_id || null, template_data || null, open_new_chat !== undefined ? open_new_chat : 1, req.params.id], function(err) {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ updated: this.changes });
     });
@@ -508,6 +508,41 @@ async function processDispatch(isSimulation = false, ruleId = null, clientId = n
                                 const nome = registro.nome || registro.cliente_nome || 'Desconhecido';
                                 const cpf = registro.cpf_cnpj || registro.cnpj_cpf || registro.cpfcnpj || registro.cpf || '';
                                 
+                                // Regra: Não fazer disparos para clientes inativos
+                                let isClientInactive = false;
+                                
+                                // Checa status direto no registro
+                                if (registro.status && registro.status.toLowerCase() !== 'ativo') {
+                                    isClientInactive = true;
+                                }
+                                
+                                // Checa status dentro dos contratos (se houver)
+                                if (!isClientInactive && registro.contratos && Array.isArray(registro.contratos) && registro.contratos.length > 0) {
+                                    const temContratoAtivo = registro.contratos.some(c => c.status && c.status.toLowerCase() === 'ativo');
+                                    if (!temContratoAtivo) {
+                                        isClientInactive = true;
+                                    }
+                                }
+
+                                if (isClientInactive) {
+                                    logStep(`   -> Ignorado: Cliente ${nome} inativo (Status SGP não é Ativo).`);
+                                    if (isSimulation) {
+                                        simulationData.push({
+                                            clientName: client.name,
+                                            ruleDays: days,
+                                            filterType: filterType,
+                                            targetDate: targetDate,
+                                            customerName: nome,
+                                            phone: "N/A",
+                                            invoiceId: "N/A",
+                                            message: "Cliente Inativo no SGP",
+                                            ignored: true,
+                                            ignoreReason: "Cliente Inativo"
+                                        });
+                                    }
+                                    continue;
+                                }
+
                                 // Extrair dados do título (boleto) IMEDIATAMENTE para evitar problemas de escopo (hoisting/temporal dead zone)
                                 var tituloObj = null;
                                 if (Array.isArray(registro.titulos) && registro.titulos.length > 0) {
@@ -729,6 +764,9 @@ async function processDispatch(isSimulation = false, ruleId = null, clientId = n
                                             // Remover barra extra no final da URL se houver
                                             const baseAtenderBemUrl = client.atenderbem_link.endsWith('/') ? client.atenderbem_link.slice(0, -1) : client.atenderbem_link;
                                             let apiUrl = '';
+                                            
+                                            // Se for nulo ou undefined, assume true (1). Se for 0, false.
+                                            const shouldOpenNewChat = (msg.open_new_chat !== undefined && msg.open_new_chat !== null) ? (msg.open_new_chat == 1) : true;
 
                                             if (isOfficial) {
                                                 apiUrl = `${baseAtenderBemUrl}/int/sendWaTemplate`;
@@ -739,7 +777,7 @@ async function processDispatch(isSimulation = false, ruleId = null, clientId = n
                                                     templateId: parseInt(msg.template_id, 10),
                                                     data: dataArray,
                                                     cancelIfAlreadyOpen: false,
-                                                    openNewChat: true
+                                                    openNewChat: shouldOpenNewChat
                                                 };
                                             } else {
                                                 apiUrl = `${baseAtenderBemUrl}/int/enqueueMessageToSend`;
@@ -751,7 +789,8 @@ async function processDispatch(isSimulation = false, ruleId = null, clientId = n
                                                     campaignName: `SGP - ${filterType} (${days} dias)${testPhoneOverride ? ' (TESTE)' : ''}`,
                                                     extData: "SGP",
                                                     extFlag: 0,
-                                                    hidden: false
+                                                    hidden: false,
+                                                    openNewChat: shouldOpenNewChat
                                                 };
                                             }
                                             

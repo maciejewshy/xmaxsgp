@@ -32,7 +32,11 @@ export default function MessageRulesModal({ client, onClose }) {
   };
 
   const handleMsgInputChange = (e) => {
-    setMsgFormData({ ...msgFormData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setMsgFormData({ 
+      ...msgFormData, 
+      [name]: name === 'open_new_chat' ? parseInt(value) : value 
+    });
   };
 
   const handleMsgSubmit = async (e) => {
@@ -47,7 +51,7 @@ export default function MessageRulesModal({ client, onClose }) {
       } else {
         await axios.post(`${MSG_API_URL}/clients/${client.id}/messages`, payload);
       }
-      setMsgFormData({ message_type: 'unofficial', message_template: '', template_id: '', template_data: '', days_from_due: 0, queue_id: '', queue_api_key: '' });
+      setMsgFormData({ message_type: 'unofficial', message_template: '', template_id: '', template_data: '', days_from_due: 0, queue_id: '', queue_api_key: '', open_new_chat: 1 });
       setEditingMsgId(null);
       fetchMessages(client.id);
     } catch (error) {
@@ -60,7 +64,8 @@ export default function MessageRulesModal({ client, onClose }) {
       ...msg,
       message_type: msg.message_type || 'unofficial',
       template_id: msg.template_id || '',
-      template_data: msg.template_data || ''
+      template_data: msg.template_data || '',
+      open_new_chat: msg.open_new_chat !== undefined && msg.open_new_chat !== null ? msg.open_new_chat : 1
     });
     setEditingMsgId(msg.id);
   };
@@ -77,7 +82,7 @@ export default function MessageRulesModal({ client, onClose }) {
   };
 
   const cancelMsgEdit = () => {
-    setMsgFormData({ message_type: 'unofficial', message_template: '', template_id: '', template_data: '', days_from_due: 0, queue_id: '', queue_api_key: '' });
+    setMsgFormData({ message_type: 'unofficial', message_template: '', template_id: '', template_data: '', days_from_due: 0, queue_id: '', queue_api_key: '', open_new_chat: 1 });
     setEditingMsgId(null);
   };
 
@@ -141,6 +146,14 @@ export default function MessageRulesModal({ client, onClose }) {
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label style={{ fontWeight: 600 }}>API Key da Fila:</label>
                 <input type="text" name="queue_api_key" value={msgFormData.queue_api_key} onChange={handleMsgInputChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #e5e7eb', boxSizing: 'border-box' }} required />
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label style={{ fontWeight: 600 }}>Abrir Novo Chat?</label>
+                <select name="open_new_chat" value={msgFormData.open_new_chat !== undefined ? msgFormData.open_new_chat : 1} onChange={handleMsgInputChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #e5e7eb', boxSizing: 'border-box' }}>
+                  <option value={1}>Sim</option>
+                  <option value={0}>Não</option>
+                </select>
+                <small style={{color: '#6b7280', fontSize: '11px', display: 'block', marginTop: '4px'}}>Reabre o chat na fila informada</small>
               </div>
             </div>
           </div>

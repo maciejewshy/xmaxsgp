@@ -182,7 +182,11 @@ function ClientDashboard({ user, onLogout }) {
   };
 
   const handleMsgInputChange = (e) => {
-    setMsgFormData({ ...msgFormData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setMsgFormData({ 
+      ...msgFormData, 
+      [name]: name === 'open_new_chat' ? parseInt(value) : value 
+    });
   };
 
   const handleMsgSubmit = async (e) => {
@@ -193,7 +197,7 @@ function ClientDashboard({ user, onLogout }) {
       } else {
         await axios.post(`${MSG_API_URL}/clients/${user.client_id}/messages`, msgFormData);
       }
-      setMsgFormData({ message_type: 'unofficial', message_template: '', template_id: '', template_data: '', days_from_due: 0, queue_id: '', queue_api_key: '' });
+      setMsgFormData({ message_type: 'unofficial', message_template: '', template_id: '', template_data: '', days_from_due: 0, queue_id: '', queue_api_key: '', open_new_chat: 1 });
       setEditingMsgId(null);
       fetchMessages();
     } catch (error) {
@@ -206,7 +210,8 @@ function ClientDashboard({ user, onLogout }) {
       ...msg,
       message_type: msg.message_type || 'unofficial',
       template_id: msg.template_id || '',
-      template_data: msg.template_data || ''
+      template_data: msg.template_data || '',
+      open_new_chat: msg.open_new_chat !== undefined && msg.open_new_chat !== null ? msg.open_new_chat : 1
     });
     setEditingMsgId(msg.id);
   };
@@ -502,6 +507,14 @@ function ClientDashboard({ user, onLogout }) {
                     <small style={{color: '#6b7280', fontSize: '11px', display: 'block', marginTop: '4px', lineHeight: '1.4'}}>
                       Negativo (ex: -5) para ANTES. Zero (0) para HOJE. Positivo (ex: 3) para DEPOIS.
                     </small>
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label style={{ fontWeight: 600 }}>Abrir Novo Chat?</label>
+                    <select name="open_new_chat" value={msgFormData.open_new_chat !== undefined ? msgFormData.open_new_chat : 1} onChange={handleMsgInputChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #e5e7eb', boxSizing: 'border-box' }}>
+                      <option value={1}>Sim</option>
+                      <option value={0}>Não</option>
+                    </select>
+                    <small style={{color: '#6b7280', fontSize: '11px', display: 'block', marginTop: '4px'}}>Reabre o chat na fila informada</small>
                   </div>
                   
                   {/* Ocultando campos de Fila para o Cliente, mantendo os valores originais no state caso seja edição */}

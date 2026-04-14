@@ -25,6 +25,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
         db.run('ALTER TABLE dispatch_messages ADD COLUMN message_type TEXT DEFAULT "unofficial"', (err) => {});
         db.run('ALTER TABLE dispatch_messages ADD COLUMN template_id TEXT', (err) => {});
         db.run('ALTER TABLE dispatch_messages ADD COLUMN template_data TEXT', (err) => {});
+        db.run('ALTER TABLE dispatch_messages ADD COLUMN open_new_chat INTEGER DEFAULT 1', (err) => {});
 
         db.run(`
             CREATE TABLE IF NOT EXISTS dispatch_messages (

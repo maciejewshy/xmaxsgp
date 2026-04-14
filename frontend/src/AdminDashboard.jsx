@@ -157,7 +157,11 @@ function AdminDashboard({ user, onLogout }) {
   });
 
   const handleMsgInputChange = (e) => {
-    setMsgFormData({ ...msgFormData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setMsgFormData({ 
+      ...msgFormData, 
+      [name]: name === 'open_new_chat' ? parseInt(value) : value 
+    });
   };
 
   const fetchMessages = async (clientId) => {
@@ -183,7 +187,7 @@ function AdminDashboard({ user, onLogout }) {
       } else {
         await axios.post(`${MSG_API_URL}/clients/${selectedClient.id}/messages`, msgFormData);
       }
-      setMsgFormData({ message_type: 'unofficial', message_template: '', template_id: '', template_data: '', days_from_due: 0, queue_id: '', queue_api_key: '' });
+      setMsgFormData({ message_type: 'unofficial', message_template: '', template_id: '', template_data: '', days_from_due: 0, queue_id: '', queue_api_key: '', open_new_chat: 1 });
       setEditingMsgId(null);
       fetchMessages(selectedClient.id);
     } catch (error) {
@@ -196,7 +200,8 @@ function AdminDashboard({ user, onLogout }) {
       ...msg,
       message_type: msg.message_type || 'unofficial',
       template_id: msg.template_id || '',
-      template_data: msg.template_data || ''
+      template_data: msg.template_data || '',
+      open_new_chat: msg.open_new_chat !== undefined && msg.open_new_chat !== null ? msg.open_new_chat : 1
     });
     setEditingMsgId(msg.id);
   };
@@ -546,6 +551,14 @@ function AdminDashboard({ user, onLogout }) {
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <label style={{ fontWeight: 600 }}>API Key (Fila):</label>
                     <input type="text" name="queue_api_key" value={msgFormData.queue_api_key} onChange={handleMsgInputChange} required style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #e5e7eb' }} />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label style={{ fontWeight: 600 }}>Abrir Novo Chat?</label>
+                    <select name="open_new_chat" value={msgFormData.open_new_chat !== undefined ? msgFormData.open_new_chat : 1} onChange={handleMsgInputChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #e5e7eb' }}>
+                      <option value={1}>Sim</option>
+                      <option value={0}>Não</option>
+                    </select>
+                    <small style={{color: '#6b7280', fontSize: '11px', display: 'block', marginTop: '4px'}}>Reabre o chat na fila informada</small>
                   </div>
                 </div>
               </div>
