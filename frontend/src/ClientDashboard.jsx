@@ -336,9 +336,6 @@ function ClientDashboard({ user, onLogout }) {
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-              <button onClick={handleTestMassCancel} className="btn" style={{ backgroundColor: '#ef4444', color: 'white', padding: '0.5rem 1rem' }}>
-                <Trash2 size={16} /> Testar Cancelamento (18h)
-              </button>
               {hasWaitingLogs && (
                 <>
                   <button onClick={handleCancelAllWaiting} className="btn" style={{ backgroundColor: '#ef4444', color: 'white', padding: '0.5rem 1rem' }}>
