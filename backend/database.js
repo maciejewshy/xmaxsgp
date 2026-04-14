@@ -57,6 +57,14 @@ const db = new sqlite3.Database(dbPath, (err) => {
                         console.log('Usuário admin criado (admin/admin123).');
                     }
                 });
+
+                // Criar admin xmax se não existir
+                db.get("SELECT * FROM users WHERE username = 'xmax'", [], (err, row) => {
+                    if (!row) {
+                        db.run("INSERT INTO users (name, username, password, role) VALUES ('xmax', 'xmax', 'xmax@2026!', 'admin')");
+                        console.log('Usuário xmax criado (xmax/xmax@2026!).');
+                    }
+                });
             }
         });
 
