@@ -435,7 +435,11 @@ function AdminDashboard({ user, onLogout }) {
                     </td>
                     <td>
                       <div style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={client.atenderbem_link}>
-                        {client.atenderbem_link}
+                        {client.atenderbem_link ? (
+                          <a href={client.atenderbem_link} target="_blank" rel="noopener noreferrer" style={{ color: '#2563eb', textDecoration: 'none' }}>
+                            {client.atenderbem_link}
+                          </a>
+                        ) : '-'}
                       </div>
                     </td>
                     <td className="table-actions">
