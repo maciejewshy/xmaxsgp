@@ -501,125 +501,146 @@ function AdminDashboard({ user, onLogout }) {
 
       {isMessageModalOpen && selectedClient && (
         <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '800px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+          <div className="modal-content" style={{ maxWidth: '1200px', width: '95%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid #e5e7eb', paddingBottom: '1rem' }}>
               <h2 style={{ margin: 0 }}>Regras de Disparo - {selectedClient.name}</h2>
               <button className="btn-icon" onClick={() => setIsMessageModalOpen(false)}><X size={24} color="#6b7280"/></button>
             </div>
             
-            <form onSubmit={handleMsgSubmit} style={{ marginBottom: '1.5rem', padding: '1rem', background: '#f9fafb', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
-              <h4 style={{ marginTop: 0 }}>{editingMsgId ? 'Editar Regra' : 'Nova Regra'}</h4>
-              
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label style={{ fontWeight: 600 }}>Tipo de Mensagem:</label>
-                  <select name="message_type" value={msgFormData.message_type} onChange={handleMsgInputChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #e5e7eb' }}>
-                    <option value="unofficial">Não Oficial (Texto Livre)</option>
-                    <option value="official">Oficial (Template META)</option>
-                  </select>
-                </div>
-
-                {msgFormData.message_type === 'unofficial' ? (
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label style={{ fontWeight: 600 }}>Mensagem de Envio:</label>
-                    <textarea name="message_template" value={msgFormData.message_template} onChange={handleMsgInputChange} rows="4" required={msgFormData.message_type === 'unofficial'} style={{ resize: 'vertical', width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #e5e7eb' }} />
-                    <small style={{color: '#6b7280', fontSize: '12px', display: 'block', marginTop: '4px'}}>
-                      <b>Variáveis Suportadas:</b> {`{nome}, {cpf}, {vencimento}, {valor}, {link_boleto}, {pix}, {linha_digitavel}`}
-                    </small>
-                  </div>
-                ) : (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '1.5rem', alignItems: 'start' }}>
+            <div style={{ display: 'flex', gap: '2rem', alignItems: 'flex-start' }}>
+              {/* Lado Esquerdo: Formulário */}
+              <div style={{ flex: '1', minWidth: '350px', background: '#f9fafb', padding: '1.5rem', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
+                <form onSubmit={handleMsgSubmit}>
+                  <h4 style={{ marginTop: 0, marginBottom: '1.5rem', color: '#111827' }}>{editingMsgId ? 'Editar Regra' : 'Nova Regra'}</h4>
+                  
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                     <div className="form-group" style={{ marginBottom: 0 }}>
-                      <label style={{ fontWeight: 600 }}>ID do Template:</label>
-                      <input type="number" name="template_id" value={msgFormData.template_id} onChange={handleMsgInputChange} required={msgFormData.message_type === 'official'} style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #e5e7eb' }} />
-                      <small style={{color: '#6b7280', fontSize: '11px', display: 'block', marginTop: '4px'}}>Ex: 62</small>
+                      <label style={{ fontWeight: 600 }}>Tipo de Mensagem:</label>
+                      <select name="message_type" value={msgFormData.message_type} onChange={handleMsgInputChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #d1d5db' }}>
+                        <option value="unofficial">Não Oficial (Texto Livre)</option>
+                        <option value="official">Oficial (Template META)</option>
+                      </select>
                     </div>
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                      <label style={{ fontWeight: 600 }}>Variáveis do Template (separadas por vírgula):</label>
-                      <input type="text" name="template_data" value={msgFormData.template_data} onChange={handleMsgInputChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #e5e7eb' }} />
-                      <small style={{color: '#6b7280', fontSize: '11px', display: 'block', marginTop: '4px'}}>Ex: {`{nome},{valor}`} (Deixe em branco se o template não tiver variáveis)</small>
+
+                    {msgFormData.message_type === 'unofficial' ? (
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label style={{ fontWeight: 600 }}>Mensagem de Envio:</label>
+                        <textarea name="message_template" value={msgFormData.message_template} onChange={handleMsgInputChange} rows="5" required={msgFormData.message_type === 'unofficial'} style={{ resize: 'vertical', width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #d1d5db' }} />
+                        <small style={{color: '#6b7280', fontSize: '12px', display: 'block', marginTop: '4px'}}>
+                          <b>Variáveis:</b> {`{nome}, {cpf}, {vencimento}, {valor}, {link_boleto}, {pix}, {linha_digitavel}`}
+                        </small>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                          <label style={{ fontWeight: 600 }}>ID do Template:</label>
+                          <input type="number" name="template_id" value={msgFormData.template_id} onChange={handleMsgInputChange} required={msgFormData.message_type === 'official'} style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #d1d5db' }} />
+                          <small style={{color: '#6b7280', fontSize: '11px', display: 'block', marginTop: '4px'}}>Ex: 62</small>
+                        </div>
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                          <label style={{ fontWeight: 600 }}>Variáveis do Template:</label>
+                          <input type="text" name="template_data" value={msgFormData.template_data} onChange={handleMsgInputChange} placeholder="Ex: {nome},{valor}" style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #d1d5db' }} />
+                          <small style={{color: '#6b7280', fontSize: '11px', display: 'block', marginTop: '4px'}}>Separadas por vírgula</small>
+                        </div>
+                      </div>
+                    )}
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label style={{ fontWeight: 600 }}>Dias de Vencimento:</label>
+                        <input type="number" name="days_from_due" value={msgFormData.days_from_due} onChange={handleMsgInputChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #d1d5db' }} required />
+                        <small style={{color: '#6b7280', fontSize: '11px', display: 'block', marginTop: '4px'}}>-5 (Antes), 0 (Hoje), 3 (Depois)</small>
+                      </div>
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label style={{ fontWeight: 600 }}>Abrir Novo Chat?</label>
+                        <select name="open_new_chat" value={msgFormData.open_new_chat !== undefined ? msgFormData.open_new_chat : 1} onChange={handleMsgInputChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #d1d5db' }}>
+                          <option value={1}>Sim</option>
+                          <option value={0}>Não</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label style={{ fontWeight: 600 }}>ID da Fila (Queue):</label>
+                        <input type="text" name="queue_id" value={msgFormData.queue_id} onChange={handleMsgInputChange} required style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #d1d5db' }} />
+                      </div>
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label style={{ fontWeight: 600 }}>API Key (Fila):</label>
+                        <input type="text" name="queue_api_key" value={msgFormData.queue_api_key} onChange={handleMsgInputChange} required style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #d1d5db' }} />
+                      </div>
                     </div>
                   </div>
-                )}
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem', alignItems: 'start' }}>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label style={{ fontWeight: 600 }}>Dias de Vencimento:</label>
-                    <input type="number" name="days_from_due" value={msgFormData.days_from_due} onChange={handleMsgInputChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #e5e7eb' }} required />
-                    <small style={{color: '#6b7280', fontSize: '11px', display: 'block', marginTop: '4px'}}>Ex: -5 (Antes), 0 (Hoje), 3 (Depois)</small>
+                  <div className="actions" style={{ justifyContent: 'flex-end', marginTop: '2rem', paddingTop: '1rem', borderTop: '1px solid #e5e7eb' }}>
+                    {editingMsgId && (
+                      <button type="button" className="btn btn-secondary" onClick={cancelMsgEdit}>
+                        Cancelar Edição
+                      </button>
+                    )}
+                    <button type="submit" className="btn btn-primary" style={{ width: editingMsgId ? 'auto' : '100%', justifyContent: 'center' }}>
+                      <Save size={16} /> {editingMsgId ? 'Atualizar Regra' : 'Adicionar Nova Regra'}
+                    </button>
                   </div>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label style={{ fontWeight: 600 }}>ID da Fila (Queue):</label>
-                    <input type="text" name="queue_id" value={msgFormData.queue_id} onChange={handleMsgInputChange} required style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #e5e7eb' }} />
-                  </div>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label style={{ fontWeight: 600 }}>API Key (Fila):</label>
-                    <input type="text" name="queue_api_key" value={msgFormData.queue_api_key} onChange={handleMsgInputChange} required style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #e5e7eb' }} />
-                  </div>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label style={{ fontWeight: 600 }}>Abrir Novo Chat?</label>
-                    <select name="open_new_chat" value={msgFormData.open_new_chat !== undefined ? msgFormData.open_new_chat : 1} onChange={handleMsgInputChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #e5e7eb' }}>
-                      <option value={1}>Sim</option>
-                      <option value={0}>Não</option>
-                    </select>
-                    <small style={{color: '#6b7280', fontSize: '11px', display: 'block', marginTop: '4px'}}>Reabre o chat na fila informada</small>
-                  </div>
-                </div>
+                </form>
               </div>
-              <div className="actions" style={{ justifyContent: 'flex-end', marginTop: '1.5rem' }}>
-                {editingMsgId && (
-                  <button type="button" className="btn btn-secondary" onClick={cancelMsgEdit}>
-                    Cancelar Edição
-                  </button>
-                )}
-                <button type="submit" className="btn btn-primary">
-                  <Save size={16} /> {editingMsgId ? 'Atualizar Regra' : 'Adicionar Regra'}
-                </button>
-              </div>
-            </form>
 
-            <div className="table-responsive" style={{ maxHeight: '300px', overflowY: 'auto' }}>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Mensagem/Template</th>
-                    <th>Dias</th>
-                    <th>Status Fatura</th>
-                    <th>Fila</th>
-                    <th>Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {messages.length === 0 ? (
-                    <tr><td colSpan="5" style={{ textAlign: 'center' }}>Nenhuma regra cadastrada.</td></tr>
-                  ) : (
-                    messages.map(msg => (
-                      <tr key={msg.id}>
-                        <td style={{ maxWidth: '300px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {msg.message_type === 'official' ? (
-                            <span style={{color: '#2563eb', fontWeight: 500}}>[Oficial] TPL {msg.template_id}: {msg.template_data}</span>
-                          ) : (
-                            msg.message_template
-                          )}
-                        </td>
-                        <td>{msg.days_from_due}</td>
-                        <td>
-                          {msg.days_from_due < 0 ? 'A Vencer' : msg.days_from_due === 0 ? 'Vencendo Hoje' : 'Vencida'}
-                        </td>
-                        <td>{msg.queue_id}</td>
-                        <td className="table-actions">
-                          <button className="btn-icon text-blue" onClick={() => handleMsgEdit(msg)} title="Editar">
-                            <Edit2 size={18} />
-                          </button>
-                          <button className="btn-icon text-red" onClick={() => handleMsgDelete(msg.id)} title="Remover">
-                            <Trash2 size={18} />
-                          </button>
-                        </td>
+              {/* Lado Direito: Lista de Mensagens */}
+              <div style={{ flex: '1.5', minWidth: '400px', display: 'flex', flexDirection: 'column', height: '100%' }}>
+                <h3 style={{ marginTop: 0, marginBottom: '1rem', color: '#111827' }}>Regras Ativas</h3>
+                <div className="table-responsive" style={{ maxHeight: '600px', overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: '8px' }}>
+                  <table style={{ margin: 0 }}>
+                    <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
+                      <tr>
+                        <th>Mensagem/Template</th>
+                        <th style={{ width: '60px', textAlign: 'center' }}>Dias</th>
+                        <th style={{ width: '120px' }}>Status Fatura</th>
+                        <th style={{ width: '60px', textAlign: 'center' }}>Fila</th>
+                        <th style={{ width: '80px', textAlign: 'center' }}>Ações</th>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                    </thead>
+                    <tbody>
+                      {messages.length === 0 ? (
+                        <tr><td colSpan="5" style={{ textAlign: 'center', padding: '2rem', color: '#6b7280' }}>Nenhuma regra cadastrada.</td></tr>
+                      ) : (
+                        messages.map(msg => (
+                          <tr key={msg.id} style={{ backgroundColor: editingMsgId === msg.id ? '#eff6ff' : 'transparent' }}>
+                            <td style={{ maxWidth: '250px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={msg.message_type === 'official' ? `[Oficial] TPL ${msg.template_id}: ${msg.template_data}` : msg.message_template}>
+                              {msg.message_type === 'official' ? (
+                                <span style={{color: '#2563eb', fontWeight: 500}}>[Oficial] TPL {msg.template_id}: {msg.template_data}</span>
+                              ) : (
+                                msg.message_template
+                              )}
+                            </td>
+                            <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{msg.days_from_due}</td>
+                            <td>
+                              <span style={{ 
+                                padding: '0.25rem 0.5rem', 
+                                borderRadius: '999px', 
+                                fontSize: '0.75rem', 
+                                fontWeight: 500,
+                                backgroundColor: msg.days_from_due < 0 ? '#fef3c7' : msg.days_from_due === 0 ? '#dbeafe' : '#fee2e2',
+                                color: msg.days_from_due < 0 ? '#92400e' : msg.days_from_due === 0 ? '#1e40af' : '#991b1b'
+                              }}>
+                                {msg.days_from_due < 0 ? 'A Vencer' : msg.days_from_due === 0 ? 'Vencendo Hoje' : 'Vencida'}
+                              </span>
+                            </td>
+                            <td style={{ textAlign: 'center' }}>{msg.queue_id}</td>
+                            <td className="table-actions" style={{ justifyContent: 'center' }}>
+                              <button className="btn-icon text-blue" onClick={() => handleMsgEdit(msg)} title="Editar" style={{ background: editingMsgId === msg.id ? '#dbeafe' : 'transparent' }}>
+                                <Edit2 size={18} />
+                              </button>
+                              <button className="btn-icon text-red" onClick={() => handleMsgDelete(msg.id)} title="Remover">
+                                <Trash2 size={18} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           </div>
         </div>
