@@ -501,7 +501,7 @@ function AdminDashboard({ user, onLogout }) {
 
       {isMessageModalOpen && selectedClient && (
         <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '1200px', width: '95%' }}>
+          <div className="modal-content" style={{ maxWidth: '1600px', width: '98%', maxHeight: '95vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid #e5e7eb', paddingBottom: '1rem' }}>
               <h2 style={{ margin: 0 }}>Regras de Disparo - {selectedClient.name}</h2>
               <button className="btn-icon" onClick={() => setIsMessageModalOpen(false)}><X size={24} color="#6b7280"/></button>
