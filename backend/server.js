@@ -53,7 +53,7 @@ app.get('/api/clients/:id', (req, res) => {
 });
 
 app.post('/api/clients', (req, res) => {
-    const { name, sgp_url, sgp_token, atenderbem_link, is_active, username, password } = req.body;
+    const { name, sgp_url, sgp_token, atenderbem_link, is_active, username, password, dispatch_days, dispatch_start_time } = req.body;
     
     // Iniciar Transação (simulada) para garantir que cliente e usuário sejam criados juntos
     db.get('SELECT id FROM users WHERE username = ?', [username], (err, row) => {
@@ -62,10 +62,21 @@ app.post('/api/clients', (req, res) => {
 
         const queryClient = `
             INSERT INTO clients (
-                name, sgp_url, sgp_token, atenderbem_link, is_active
-            ) VALUES (?, ?, ?, ?, ?)
+                name, sgp_url, sgp_token, atenderbem_link, is_active, dispatch_days, dispatch_start_time
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
         `;
-        db.run(queryClient, [name, sgp_url, sgp_token, atenderbem_link, is_active !== undefined ? is_active : 1], function(err) {
+        db.run(
+            queryClient,
+            [
+                name,
+                sgp_url,
+                sgp_token,
+                atenderbem_link,
+                is_active !== undefined ? is_active : 1,
+                dispatch_days || '1,2,3,4,5',
+                dispatch_start_time || '08:00'
+            ],
+            function(err) {
             if (err) return res.status(500).json({ error: err.message });
             
             const clientId = this.lastID;
@@ -82,13 +93,25 @@ app.post('/api/clients', (req, res) => {
 });
 
 app.put('/api/clients/:id', (req, res) => {
-    const { name, sgp_url, sgp_token, atenderbem_link, is_active } = req.body;
+    const { name, sgp_url, sgp_token, atenderbem_link, is_active, dispatch_days, dispatch_start_time } = req.body;
     const query = `
         UPDATE clients SET 
-            name = ?, sgp_url = ?, sgp_token = ?, atenderbem_link = ?, is_active = ?
+            name = ?, sgp_url = ?, sgp_token = ?, atenderbem_link = ?, is_active = ?, dispatch_days = ?, dispatch_start_time = ?
         WHERE id = ?
     `;
-    db.run(query, [name, sgp_url, sgp_token, atenderbem_link, is_active, req.params.id], function(err) {
+    db.run(
+        query,
+        [
+            name,
+            sgp_url,
+            sgp_token,
+            atenderbem_link,
+            is_active,
+            dispatch_days || '1,2,3,4,5',
+            dispatch_start_time || '08:00',
+            req.params.id
+        ],
+        function(err) {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ updated: this.changes });
     });
@@ -982,23 +1005,92 @@ app.post('/api/dispatch/test-mass-cancel', async (req, res) => {
     }
 });
 
+function pad2(n) {
+    return String(n).padStart(2, '0');
+}
+
+function getLocalDateKey(now) {
+    const y = now.getFullYear();
+    const m = pad2(now.getMonth() + 1);
+    const d = pad2(now.getDate());
+    return `${y}-${m}-${d}`;
+}
+
+function parseDispatchDays(value) {
+    if (!value || typeof value !== 'string') return null;
+    const days = value
+        .split(',')
+        .map(s => parseInt(s.trim(), 10))
+        .filter(n => Number.isInteger(n) && n >= 0 && n <= 6);
+    return days.length > 0 ? days : null;
+}
+
+function shouldRunForClientNow(client, now) {
+    const allowedDays = parseDispatchDays(client.dispatch_days);
+    if (allowedDays && !allowedDays.includes(now.getDay())) return false;
+    const currentTime = `${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
+    const startTime = (client.dispatch_start_time && String(client.dispatch_start_time).trim()) ? String(client.dispatch_start_time).trim() : '08:00';
+    return currentTime === startTime;
+}
+
+function tryRegisterDispatchRun(clientId, runDate, runTime) {
+    return new Promise((resolve) => {
+        db.run(
+            'INSERT OR IGNORE INTO dispatch_runs (client_id, run_date, run_time) VALUES (?, ?, ?)',
+            [clientId, runDate, runTime],
+            function(err) {
+                if (err) return resolve(false);
+                resolve(this.changes > 0);
+            }
+        );
+    });
+}
+
+async function processScheduledDispatchRuns() {
+    const now = new Date();
+    const runDate = getLocalDateKey(now);
+    const runTime = `${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
+
+    return new Promise((resolve) => {
+        db.all('SELECT id, name, is_active, dispatch_days, dispatch_start_time FROM clients WHERE is_active = 1', [], async (err, clients) => {
+            if (err || !clients) return resolve({ ran: 0, checked: 0 });
+            let ran = 0;
+
+            for (const client of clients) {
+                if (!shouldRunForClientNow(client, now)) continue;
+                const registered = await tryRegisterDispatchRun(client.id, runDate, runTime);
+                if (!registered) continue;
+
+                try {
+                    await processDispatch(false, null, client.id);
+                    ran++;
+                } catch (e) {
+                    console.error(`[CRON] Erro ao disparar para o cliente ${client.name}:`, e.message);
+                }
+            }
+
+            resolve({ ran, checked: clients.length });
+        });
+    });
+}
+
 app.listen(PORT, () => {
     console.log(`Servidor rodando na porta ${PORT}`);
     
-    // Iniciar Cron Job: Todos os dias às 08:00 AM
-    cron.schedule('0 8 * * *', async () => {
-        console.log(`[CRON] Iniciando rotina diária de disparos reais (${new Date().toLocaleString()})`);
+    cron.schedule('* * * * *', async () => {
         try {
-            await processDispatch(false); // Execução real para todos os clientes
-            console.log(`[CRON] Rotina de disparos concluída com sucesso.`);
+            const result = await processScheduledDispatchRuns();
+            if (result.ran > 0) {
+                console.log(`[CRON] Disparos executados: ${result.ran} (clientes verificados: ${result.checked})`);
+            }
         } catch (error) {
-            console.error(`[CRON] Erro na rotina diária:`, error.message);
+            console.error(`[CRON] Erro na rotina de disparos agendados:`, error.message);
         }
     }, {
         scheduled: true,
         timezone: "America/Sao_Paulo"
     });
-    console.log(`Rotina diária de disparos agendada para as 08:00 (America/Sao_Paulo).`);
+    console.log(`Rotina de disparos agendados ativa (verificação a cada minuto, America/Sao_Paulo).`);
 
     // Iniciar Cron Job: Todos os dias às 18:00 (Cancelamento em massa de mensagens pendentes do dia)
     cron.schedule('0 18 * * *', async () => {
