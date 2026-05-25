@@ -6,6 +6,7 @@ import ClientDashboard from './ClientDashboard';
 import './App.css';
 
 function App() {
+  const basename = (import.meta.env.BASE_URL || '/').replace(/\/$/, '') || '/';
   const [user, setUser] = useState(() => {
     const saved = localStorage.getItem('sgp_user');
     return saved ? JSON.parse(saved) : null;
@@ -28,7 +29,7 @@ function App() {
   };
 
   return (
-    <Router basename="/sgp">
+    <Router basename={basename}>
       <div className="app-container">
         <Routes>
           <Route path="/" element={
