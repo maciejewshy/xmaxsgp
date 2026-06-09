@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
+const path = require('path');
 const db = require('./database');
 const cron = require('node-cron');
 
@@ -9,6 +10,16 @@ const PORT = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(express.json());
+
+app.get('/api/database/download', (req, res) => {
+    const databasePath = path.resolve(__dirname, 'database.sqlite');
+    const fileName = `database-backup-${new Date().toISOString().slice(0, 10)}.sqlite`;
+    res.download(databasePath, fileName, (err) => {
+        if (err && !res.headersSent) {
+            res.status(500).json({ error: 'Erro ao baixar banco de dados' });
+        }
+    });
+});
 
 // Autenticação (Login)
 app.post('/api/login', (req, res) => {
