@@ -27,6 +27,7 @@ function ClientDashboard({ user, onLogout }) {
   const [messages, setMessages] = useState([]);
   const [editingMsgId, setEditingMsgId] = useState(null);
   const [msgFormData, setMsgFormData] = useState({
+    trigger_type: 'due_date',
     message_type: 'unofficial',
     message_template: '',
     template_id: '',
@@ -183,10 +184,18 @@ function ClientDashboard({ user, onLogout }) {
 
   const handleMsgInputChange = (e) => {
     const { name, value } = e.target;
-    setMsgFormData({ 
-      ...msgFormData, 
+    if (name === 'trigger_type') {
+      setMsgFormData(prev => ({
+        ...prev,
+        trigger_type: value,
+        days_from_due: value === 'birthday' ? 0 : prev.days_from_due
+      }));
+      return;
+    }
+    setMsgFormData(prev => ({ 
+      ...prev, 
       [name]: name === 'open_new_chat' ? parseInt(value) : value 
-    });
+    }));
   };
 
   const handleMsgSubmit = async (e) => {
@@ -197,7 +206,7 @@ function ClientDashboard({ user, onLogout }) {
       } else {
         await axios.post(`${MSG_API_URL}/clients/${user.client_id}/messages`, msgFormData);
       }
-      setMsgFormData({ message_type: 'unofficial', message_template: '', template_id: '', template_data: '', days_from_due: 0, queue_id: '', queue_api_key: '', open_new_chat: 1 });
+      setMsgFormData({ trigger_type: 'due_date', message_type: 'unofficial', message_template: '', template_id: '', template_data: '', days_from_due: 0, queue_id: '', queue_api_key: '', open_new_chat: 1 });
       setEditingMsgId(null);
       fetchMessages();
     } catch (error) {
@@ -208,6 +217,7 @@ function ClientDashboard({ user, onLogout }) {
   const handleMsgEdit = (msg) => {
     setMsgFormData({
       ...msg,
+      trigger_type: msg.trigger_type || 'due_date',
       message_type: msg.message_type || 'unofficial',
       template_id: msg.template_id || '',
       template_data: msg.template_data || '',
@@ -467,6 +477,13 @@ function ClientDashboard({ user, onLogout }) {
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label style={{ fontWeight: 600 }}>Tipo de Regra:</label>
+                  <select name="trigger_type" value={msgFormData.trigger_type || 'due_date'} onChange={handleMsgInputChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #e5e7eb' }}>
+                    <option value="due_date">Cobrança (Vencimento)</option>
+                    <option value="birthday">Aniversário</option>
+                  </select>
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
                   <label style={{ fontWeight: 600 }}>Tipo de Mensagem:</label>
                   <select name="message_type" value={msgFormData.message_type} onChange={handleMsgInputChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #e5e7eb' }}>
                     <option value="unofficial">Não Oficial (Texto Livre)</option>
@@ -499,10 +516,10 @@ function ClientDashboard({ user, onLogout }) {
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem', alignItems: 'start' }}>
                   <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label style={{ fontWeight: 600 }}>Dias (em relação ao vencimento):</label>
-                    <input type="number" name="days_from_due" value={msgFormData.days_from_due} onChange={handleMsgInputChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #e5e7eb', boxSizing: 'border-box' }} required />
+                    <label style={{ fontWeight: 600 }}>{msgFormData.trigger_type === 'birthday' ? 'Dias (não usado)' : 'Dias (em relação ao vencimento):'}</label>
+                    <input type="number" name="days_from_due" value={msgFormData.days_from_due} onChange={handleMsgInputChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #e5e7eb', boxSizing: 'border-box' }} required disabled={msgFormData.trigger_type === 'birthday'} />
                     <small style={{color: '#6b7280', fontSize: '11px', display: 'block', marginTop: '4px', lineHeight: '1.4'}}>
-                      Negativo (ex: -5) para ANTES. Zero (0) para HOJE. Positivo (ex: 3) para DEPOIS.
+                      {msgFormData.trigger_type === 'birthday' ? 'Dispara no dia do aniversário do cliente no SGP' : 'Negativo (ex: -5) para ANTES. Zero (0) para HOJE. Positivo (ex: 3) para DEPOIS.'}
                     </small>
                   </div>
                   <div className="form-group" style={{ marginBottom: 0 }}>
@@ -521,7 +538,7 @@ function ClientDashboard({ user, onLogout }) {
               </div>
 
               <div className="actions" style={{ justifyContent: 'flex-end', marginTop: '1.5rem', borderTop: '1px solid #e5e7eb', paddingTop: '1.5rem' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => { setMsgFormData({ message_template: '', days_from_due: 0, queue_id: '', queue_api_key: '' }); setEditingMsgId(null); }}>
+                <button type="button" className="btn btn-secondary" onClick={() => { setMsgFormData({ trigger_type: 'due_date', message_type: 'unofficial', message_template: '', template_id: '', template_data: '', days_from_due: 0, queue_id: '', queue_api_key: '', open_new_chat: 1 }); setEditingMsgId(null); }}>
                   Cancelar Edição
                 </button>
                 <button type="submit" className="btn btn-primary" style={{ minWidth: '150px', justifyContent: 'center' }}>
@@ -544,7 +561,7 @@ function ClientDashboard({ user, onLogout }) {
               <thead>
                 <tr>
                   <th>Dias</th>
-                  <th>Status Fatura</th>
+                  <th>Tipo</th>
                   <th>Mensagem</th>
                   <th style={{ textAlign: 'right' }}>Ações</th>
                 </tr>
@@ -562,10 +579,10 @@ function ClientDashboard({ user, onLogout }) {
                           borderRadius: '999px', 
                           fontSize: '12px',
                           fontWeight: '500',
-                          backgroundColor: msg.days_from_due < 0 ? '#fef3c7' : msg.days_from_due === 0 ? '#d1fae5' : '#fee2e2',
-                          color: msg.days_from_due < 0 ? '#d97706' : msg.days_from_due === 0 ? '#059669' : '#dc2626'
+                          backgroundColor: (msg.trigger_type || 'due_date') === 'birthday' ? '#dcfce7' : msg.days_from_due < 0 ? '#fef3c7' : msg.days_from_due === 0 ? '#d1fae5' : '#fee2e2',
+                          color: (msg.trigger_type || 'due_date') === 'birthday' ? '#166534' : msg.days_from_due < 0 ? '#d97706' : msg.days_from_due === 0 ? '#059669' : '#dc2626'
                         }}>
-                          {msg.days_from_due < 0 ? 'A Vencer' : msg.days_from_due === 0 ? 'Vencendo Hoje' : 'Vencida'}
+                          {(msg.trigger_type || 'due_date') === 'birthday' ? 'Aniversário' : msg.days_from_due < 0 ? 'A Vencer' : msg.days_from_due === 0 ? 'Vencendo Hoje' : 'Vencida'}
                         </span>
                       </td>
                       <td style={{ maxWidth: '400px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -576,7 +593,7 @@ function ClientDashboard({ user, onLogout }) {
                         )}
                       </td>
                       <td className="table-actions" style={{ justifyContent: 'flex-end' }}>
-                        <button className="btn-icon text-blue" onClick={() => { setMsgFormData(msg); setEditingMsgId(msg.id); }} title="Editar">
+                        <button className="btn-icon text-blue" onClick={() => handleMsgEdit(msg)} title="Editar">
                           <Edit2 size={18} />
                         </button>
                         <button className="btn-icon text-red" onClick={() => handleMsgDelete(msg.id)} title="Remover">

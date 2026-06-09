@@ -145,25 +145,53 @@ app.get('/api/clients/:clientId/messages', (req, res) => {
 });
 
 app.post('/api/clients/:clientId/messages', (req, res) => {
-    const { message_template, days_from_due, queue_id, queue_api_key, message_type, template_id, template_data, open_new_chat } = req.body;
+    const { message_template, days_from_due, queue_id, queue_api_key, message_type, template_id, template_data, open_new_chat, trigger_type } = req.body;
     const query = `
-        INSERT INTO dispatch_messages (client_id, message_template, days_from_due, queue_id, queue_api_key, message_type, template_id, template_data, open_new_chat)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO dispatch_messages (client_id, message_template, days_from_due, queue_id, queue_api_key, message_type, template_id, template_data, open_new_chat, trigger_type)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
-    db.run(query, [req.params.clientId, message_template, days_from_due, queue_id, queue_api_key, message_type || 'unofficial', template_id || null, template_data || null, open_new_chat !== undefined ? open_new_chat : 1], function(err) {
+    db.run(
+        query,
+        [
+            req.params.clientId,
+            message_template,
+            days_from_due,
+            queue_id,
+            queue_api_key,
+            message_type || 'unofficial',
+            template_id || null,
+            template_data || null,
+            open_new_chat !== undefined ? open_new_chat : 1,
+            trigger_type || 'due_date'
+        ],
+        function(err) {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ id: this.lastID });
     });
 });
 
 app.put('/api/messages/:id', (req, res) => {
-    const { message_template, days_from_due, queue_id, queue_api_key, message_type, template_id, template_data, open_new_chat } = req.body;
+    const { message_template, days_from_due, queue_id, queue_api_key, message_type, template_id, template_data, open_new_chat, trigger_type } = req.body;
     const query = `
         UPDATE dispatch_messages SET 
-            message_template = ?, days_from_due = ?, queue_id = ?, queue_api_key = ?, message_type = ?, template_id = ?, template_data = ?, open_new_chat = ?
+            message_template = ?, days_from_due = ?, queue_id = ?, queue_api_key = ?, message_type = ?, template_id = ?, template_data = ?, open_new_chat = ?, trigger_type = ?
         WHERE id = ?
     `;
-    db.run(query, [message_template, days_from_due, queue_id, queue_api_key, message_type || 'unofficial', template_id || null, template_data || null, open_new_chat !== undefined ? open_new_chat : 1, req.params.id], function(err) {
+    db.run(
+        query,
+        [
+            message_template,
+            days_from_due,
+            queue_id,
+            queue_api_key,
+            message_type || 'unofficial',
+            template_id || null,
+            template_data || null,
+            open_new_chat !== undefined ? open_new_chat : 1,
+            trigger_type || 'due_date',
+            req.params.id
+        ],
+        function(err) {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ updated: this.changes });
     });
@@ -431,6 +459,424 @@ async function processDispatch(isSimulation = false, ruleId = null, clientId = n
                 if (messages.length === 0) continue;
 
                 for (const msg of messages) {
+                    const triggerType = msg.trigger_type || 'due_date';
+
+                    if (triggerType === 'birthday') {
+                        const hojeIso = new Intl.DateTimeFormat('en-CA', {
+                            timeZone: 'America/Sao_Paulo',
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit'
+                        }).format(new Date());
+                        const [, hojeMes, hojeDia] = hojeIso.split('-').map(n => parseInt(n, 10));
+                        const days = 0;
+                        const filterType = 'ANIVERSÁRIO';
+
+                        logStep(`[${isSimulation ? 'SIMULAÇÃO' : 'DISPARO'}] Cliente: ${client.name} | Regra ID: ${msg.id} | Tipo: ${filterType} | Data Alvo: ${hojeIso}`);
+
+                        const parseBirthDateParts = (raw) => {
+                            if (!raw) return null;
+                            const s = String(raw).trim();
+                            const mIso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+                            if (mIso) {
+                                return { month: parseInt(mIso[2], 10), day: parseInt(mIso[3], 10) };
+                            }
+                            const mBr = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+                            if (mBr) {
+                                return { month: parseInt(mBr[2], 10), day: parseInt(mBr[1], 10) };
+                            }
+                            return null;
+                        };
+
+                        const extractBirthRaw = (registro) => {
+                            return (
+                                registro.data_nascimento ||
+                                registro.dataNascimento ||
+                                registro.nascimento ||
+                                registro.dataNascimentoCliente ||
+                                registro.data_nasc ||
+                                registro.dt_nascimento ||
+                                null
+                            );
+                        };
+
+                        try {
+                            let offset = 0;
+                            const limit = 50;
+                            let totalRegistrosEncontrados = 0;
+                            let temMaisDados = true;
+
+                            while (temMaisDados) {
+                                const sgpPayload = {
+                                    status: 'ativo',
+                                    limit: limit,
+                                    offset: offset
+                                };
+
+                                const endpointUrl = `${sgpUrl}/api/ura/clientes/`;
+                                logStep(` -> [API] Fazendo POST para: ${endpointUrl}`);
+                                logStep(` -> [PAYLOAD] ${JSON.stringify(sgpPayload)}`);
+
+                                const sgpHeaders = {
+                                    'Authorization': sgpToken,
+                                    'Content-Type': 'application/json'
+                                };
+
+                                let clientesResponse;
+                                try {
+                                    clientesResponse = await axios.post(endpointUrl, sgpPayload, { headers: sgpHeaders });
+                                    logStep(` -> [RESPOSTA] SGP respondeu com status ${clientesResponse.status}`);
+                                    logStep(` -> [DADOS RETORNADOS] ${JSON.stringify(clientesResponse.data).substring(0, 500)}`);
+                                } catch (apiErr) {
+                                    logStep(` -> [ERRO] Falha ao comunicar com SGP: ${apiErr.message}`);
+                                    if (apiErr.response && apiErr.response.data) {
+                                        logStep(` -> [DETALHES DO ERRO] ${JSON.stringify(apiErr.response.data)}`);
+                                    }
+                                    break;
+                                }
+
+                                let resultadosSgp = [];
+                                const dataBody = clientesResponse.data;
+                                let clientesArray = null;
+
+                                if (dataBody.cliente_rawBody && Array.isArray(dataBody.cliente_rawBody.clientes)) {
+                                    clientesArray = dataBody.cliente_rawBody.clientes;
+                                } else if (dataBody.clientes && Array.isArray(dataBody.clientes)) {
+                                    clientesArray = dataBody.clientes;
+                                } else if (Array.isArray(dataBody)) {
+                                    clientesArray = dataBody;
+                                } else if (dataBody && Array.isArray(dataBody.results)) {
+                                    clientesArray = dataBody.results;
+                                }
+
+                                if (clientesArray) {
+                                    resultadosSgp = clientesArray;
+                                } else if (dataBody && dataBody.error) {
+                                    logStep(` -> [ERRO SGP] ${dataBody.error}`);
+                                    break;
+                                } else if (typeof dataBody === 'object' && dataBody !== null) {
+                                    if (dataBody.id || dataBody.nome || dataBody.cliente_nome) {
+                                        resultadosSgp = [dataBody];
+                                    } else {
+                                        logStep(` -> [AVISO] Formato de resposta não reconhecido ou vazio. Chaves: ${Object.keys(dataBody).join(', ')}`);
+                                    }
+                                }
+
+                                if (resultadosSgp.length === 0) {
+                                    logStep(` -> Nenhum registro encontrado nesta página (offset: ${offset}).`);
+                                    temMaisDados = false;
+                                    break;
+                                }
+
+                                logStep(` -> Encontrados ${resultadosSgp.length} registros (página atual).`);
+                                totalRegistrosEncontrados += resultadosSgp.length;
+
+                                for (const registro of resultadosSgp) {
+                                    const nome = registro.nome || registro.cliente_nome || 'Desconhecido';
+                                    const cpf = registro.cpf_cnpj || registro.cnpj_cpf || registro.cpfcnpj || registro.cpf || '';
+
+                                    const birthRaw = extractBirthRaw(registro);
+                                    const birthParts = parseBirthDateParts(birthRaw);
+                                    if (!birthParts || birthParts.month !== hojeMes || birthParts.day !== hojeDia) {
+                                        continue;
+                                    }
+
+                                    let isClientInactive = false;
+                                    if (registro.status && registro.status.toLowerCase() !== 'ativo') {
+                                        isClientInactive = true;
+                                    }
+                                    if (!isClientInactive && registro.contratos && Array.isArray(registro.contratos) && registro.contratos.length > 0) {
+                                        const temContratoAtivo = registro.contratos.some(c => c.status && c.status.toLowerCase() === 'ativo');
+                                        if (!temContratoAtivo) {
+                                            isClientInactive = true;
+                                        }
+                                    }
+                                    if (isClientInactive) {
+                                        logStep(`   -> Ignorado: Cliente ${nome} inativo (Status SGP não é Ativo).`);
+                                        if (isSimulation) {
+                                            simulationData.push({
+                                                clientName: client.name,
+                                                ruleDays: days,
+                                                filterType: filterType,
+                                                targetDate: hojeIso,
+                                                customerName: nome,
+                                                phone: "N/A",
+                                                invoiceId: "N/A",
+                                                message: "Cliente Inativo no SGP",
+                                                ignored: true,
+                                                ignoreReason: "Cliente Inativo"
+                                            });
+                                        }
+                                        continue;
+                                    }
+
+                                    let telefonesDisponiveis = [];
+                                    if (registro.contatos) {
+                                        if (Array.isArray(registro.contatos.celulares)) {
+                                            telefonesDisponiveis.push(...registro.contatos.celulares);
+                                        }
+                                        if (Array.isArray(registro.contatos.telefones)) {
+                                            telefonesDisponiveis.push(...registro.contatos.telefones);
+                                        }
+                                    }
+                                    ['celular', 'telefone', 'contatos_celulares'].forEach(campo => {
+                                        if (registro[campo]) {
+                                            const nums = registro[campo].toString().split(',');
+                                            telefonesDisponiveis.push(...nums);
+                                        }
+                                    });
+                                    telefonesDisponiveis = telefonesDisponiveis.filter(t => t && t.toString().trim() !== '');
+                                    telefonesDisponiveis = [...new Set(telefonesDisponiveis)];
+
+                                    let telefoneLimpoFinal = '';
+                                    let ignoradoMotivo = null;
+
+                                    if (telefonesDisponiveis.length === 0) {
+                                        logStep(`   -> Ignorado: Cliente ${nome} sem telefone cadastrado.`);
+                                        ignoradoMotivo = 'Sem telefone cadastrado';
+                                    } else {
+                                        let encontrouWpp = false;
+                                        let ultimoMotivoInvalido = 'Nenhum número válido';
+
+                                        for (const tel of telefonesDisponiveis) {
+                                            let telLimpo = tel.toString().replace(/\D/g, '');
+                                            if (telLimpo.length >= 10 && !telLimpo.startsWith('55')) {
+                                                telLimpo = '55' + telLimpo;
+                                            }
+                                            if (telLimpo.length < 12) {
+                                                ultimoMotivoInvalido = `Número ${telLimpo} é curto demais`;
+                                                logStep(`   -> [AVISO] ${nome}: ${ultimoMotivoInvalido}, tentando próximo...`);
+                                                continue;
+                                            }
+
+                                            try {
+                                                const urlObj = new URL(client.atenderbem_link);
+                                                const atenderBemOrigin = urlObj.origin;
+
+                                                const checkPayload = {
+                                                    queueId: parseInt(msg.queue_id, 10),
+                                                    apiKey: msg.queue_api_key,
+                                                    number: telLimpo,
+                                                    country: "BR"
+                                                };
+
+                                                logStep(`   -> [AtenderBem] Checando WPP para ${telLimpo} (${nome})...`);
+                                                const checkRes = await axios.post(`${atenderBemOrigin}/int/checkIfUserExists`, checkPayload);
+                                                const wppData = checkRes.data;
+                                                logStep(`   -> [AtenderBem Resposta] ${JSON.stringify(wppData)}`);
+
+                                                if (wppData.exists === false || wppData.numberExists === false || wppData.hasWhatsapp === false || wppData.status === 'invalid') {
+                                                    ultimoMotivoInvalido = `Número ${telLimpo} não possui WhatsApp ativo`;
+                                                    logStep(`   -> [AVISO] ${nome}: ${ultimoMotivoInvalido}. Ignorando teste e forçando envio.`);
+                                                } else {
+                                                    logStep(`   -> [SUCESSO] WPP válido encontrado para ${nome}: ${telLimpo}`);
+                                                }
+
+                                                encontrouWpp = true;
+                                                telefoneLimpoFinal = telLimpo;
+                                                break;
+                                            } catch (wppErr) {
+                                                logStep(`   -> [AVISO] Falha ao checar WPP para ${telLimpo}: ${wppErr.message}. Assumindo válido por precaução.`);
+                                                encontrouWpp = true;
+                                                telefoneLimpoFinal = telLimpo;
+                                                break;
+                                            }
+                                        }
+
+                                        if (!encontrouWpp) {
+                                            ignoradoMotivo = ultimoMotivoInvalido;
+                                            logStep(`   -> Ignorado: Cliente ${nome}. Motivo final: ${ignoradoMotivo}`);
+                                        } else {
+                                            if (!isSimulation) {
+                                                const birthdayKey = `BIRTHDAY:${cpf || registro.id || nome}`;
+                                                try {
+                                                    const jaEnviado = await new Promise((resCheck) => {
+                                                        db.get(
+                                                            `SELECT id FROM dispatch_logs 
+                                                             WHERE client_id = ? 
+                                                             AND invoice_id = ? 
+                                                             AND status NOT IN ('Erro', 'Cancelado', 'Erro/Cancelado')
+                                                             AND date(created_at) = date('now', 'localtime')`,
+                                                            [client.id, birthdayKey],
+                                                            (errCheck, rowCheck) => {
+                                                                if (errCheck) resCheck(false);
+                                                                else resCheck(!!rowCheck);
+                                                            }
+                                                        );
+                                                    });
+
+                                                    if (jaEnviado) {
+                                                        ignoradoMotivo = 'Mensagem de aniversário já enviada hoje';
+                                                        logStep(`   -> [AVISO] ${nome}: ${ignoradoMotivo}.`);
+                                                    }
+                                                } catch (dbErr) {
+                                                    logStep(`   -> [ERRO DB] Falha ao checar duplicidade: ${dbErr.message}`);
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    const birthdayKey = `BIRTHDAY:${cpf || registro.id || nome}`;
+                                    const vencimentoFormatado = `${pad2(hojeDia)}/${pad2(hojeMes)}`;
+                                    const linhaDigitavel = '';
+                                    const linkBoleto = '';
+                                    const pix = '';
+                                    const valorStr = '';
+
+                                    let messageText = '';
+                                    const isOfficial = msg.message_type === 'official';
+                                    let dataArray = [];
+
+                                    if (isOfficial) {
+                                        if (msg.template_data) {
+                                            const vars = msg.template_data.split(',');
+                                            dataArray = vars.map(v => {
+                                                let val = v.trim();
+                                                if (val === 'nome' || val === '{nome}') return nome;
+                                                if (val === 'cpf' || val === '{cpf}') return cpf;
+                                                if (val === 'vencimento' || val === '{vencimento}' || val === 'data' || val === '{data}') return vencimentoFormatado;
+                                                if (val === 'linha_digitavel' || val === '{linha_digitavel}') return linhaDigitavel;
+                                                if (val === 'link_boleto' || val === '{link_boleto}' || val === 'link' || val === '{link}') return linkBoleto;
+                                                if (val === 'valor' || val === '{valor}') return valorStr;
+                                                if (val === 'pix' || val === '{pix}') return pix;
+                                                return val
+                                                    .replace(/{nome}/g, nome)
+                                                    .replace(/{cpf}/g, cpf)
+                                                    .replace(/{vencimento}/g, vencimentoFormatado)
+                                                    .replace(/{data}/g, vencimentoFormatado)
+                                                    .replace(/{linha_digitavel}/g, linhaDigitavel)
+                                                    .replace(/{link_boleto}/g, linkBoleto)
+                                                    .replace(/{link}/g, linkBoleto)
+                                                    .replace(/{valor}/g, valorStr)
+                                                    .replace(/{pix}/g, pix);
+                                            });
+                                        }
+                                        messageText = `Template ID: ${msg.template_id} - Parâmetros: ${dataArray.join(', ')}`;
+                                    } else {
+                                        messageText = (msg.message_template || '')
+                                            .replace(/{nome}/g, nome)
+                                            .replace(/{cpf}/g, cpf)
+                                            .replace(/{vencimento}/g, vencimentoFormatado)
+                                            .replace(/{linha_digitavel}/g, linhaDigitavel)
+                                            .replace(/{link_boleto}/g, linkBoleto)
+                                            .replace(/{valor}/g, valorStr)
+                                            .replace(/{pix}/g, pix);
+                                    }
+
+                                    if (isSimulation) {
+                                        simulationData.push({
+                                            clientName: client.name,
+                                            ruleDays: days,
+                                            filterType: filterType,
+                                            targetDate: hojeIso,
+                                            customerName: nome,
+                                            phone: telefoneLimpoFinal,
+                                            invoiceId: birthdayKey,
+                                            message: messageText,
+                                            ignored: ignoradoMotivo !== null,
+                                            ignoreReason: ignoradoMotivo
+                                        });
+                                    } else {
+                                        if (!ignoradoMotivo) {
+                                            if (testPhoneOverride && messagesSentCount >= 3) {
+                                                logStep(`   -> [TESTE] Limite de 3 mensagens atingido para este cliente. Interrompendo envio real.`);
+                                                break;
+                                            }
+                                            let currentPayload = null;
+                                            try {
+                                                const finalPhone = testPhoneOverride ? testPhoneOverride : telefoneLimpoFinal;
+                                                const baseAtenderBemUrl = client.atenderbem_link.endsWith('/') ? client.atenderbem_link.slice(0, -1) : client.atenderbem_link;
+                                                let apiUrl = '';
+
+                                                const shouldOpenNewChat = (msg.open_new_chat !== undefined && msg.open_new_chat !== null) ? (msg.open_new_chat == 1) : true;
+
+                                                if (isOfficial) {
+                                                    apiUrl = `${baseAtenderBemUrl}/int/sendWaTemplate`;
+                                                    currentPayload = {
+                                                        queueId: parseInt(msg.queue_id, 10),
+                                                        apiKey: msg.queue_api_key,
+                                                        number: finalPhone,
+                                                        templateId: parseInt(msg.template_id, 10),
+                                                        data: dataArray,
+                                                        cancelIfAlreadyOpen: false,
+                                                        openNewChat: shouldOpenNewChat
+                                                    };
+                                                } else {
+                                                    apiUrl = `${baseAtenderBemUrl}/int/enqueueMessageToSend`;
+                                                    currentPayload = {
+                                                        queueId: parseInt(msg.queue_id, 10),
+                                                        apiKey: msg.queue_api_key,
+                                                        number: finalPhone,
+                                                        text: messageText,
+                                                        campaignName: `SGP - ${filterType}${testPhoneOverride ? ' (TESTE)' : ''}`,
+                                                        extData: "SGP",
+                                                        extFlag: 0,
+                                                        hidden: false,
+                                                        openNewChat: shouldOpenNewChat
+                                                    };
+                                                }
+
+                                                logStep(`   -> [API DISPARO] Enviando POST para: ${apiUrl}`);
+                                                logStep(`   -> [PAYLOAD] ${JSON.stringify(currentPayload)}`);
+
+                                                const response = await axios.post(apiUrl, currentPayload, {
+                                                    headers: {
+                                                        'Accept': 'application/json',
+                                                        'Content-Type': 'application/json'
+                                                    }
+                                                });
+
+                                                logStep(`   -> [RESPOSTA DISPARO] Status ${response.status} | Data: ${JSON.stringify(response.data)}`);
+                                                const enqueuedId = response.data ? response.data.enqueuedId : null;
+
+                                                processLogs.push(`Enviado: ${client.name} - ${finalPhone} - Cliente: ${nome}`);
+
+                                                db.run(
+                                                    'INSERT INTO dispatch_logs (client_id, phone_number, invoice_id, message_sent, status, enqueued_id, queue_id, queue_api_key, api_request_log, api_response_log) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                                                    [client.id, finalPhone, birthdayKey, messageText, 'Enviado', enqueuedId, msg.queue_id, msg.queue_api_key, JSON.stringify(currentPayload), JSON.stringify(response.data)]
+                                                );
+
+                                                if (testPhoneOverride) {
+                                                    messagesSentCount++;
+                                                }
+                                            } catch (errAtb) {
+                                                console.error(`Erro ao enviar para AtenderBem (Cliente ${nome}):`, errAtb.message);
+                                                const errorResponse = errAtb.response ? JSON.stringify(errAtb.response.data) : errAtb.message;
+                                                db.run(
+                                                    'INSERT INTO dispatch_logs (client_id, phone_number, invoice_id, message_sent, status, api_request_log, api_response_log) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                                                    [client.id, testPhoneOverride ? testPhoneOverride : telefoneLimpoFinal, birthdayKey, messageText, 'Erro: ' + errAtb.message, currentPayload ? JSON.stringify(currentPayload) : JSON.stringify({}), errorResponse]
+                                                );
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if (testPhoneOverride && messagesSentCount >= 3) {
+                                    logStep(`   -> [TESTE] Interrompendo paginação do SGP para o cliente.`);
+                                    temMaisDados = false;
+                                    break;
+                                }
+
+                                if (resultadosSgp.length < limit) {
+                                    temMaisDados = false;
+                                } else {
+                                    offset += limit;
+                                }
+                            }
+
+                            logStep(` -> Total de ${totalRegistrosEncontrados} registros processados para a regra ${msg.id}.`);
+                        } catch (errSgp) {
+                            logStep(` -> [ERRO] Erro interno ao buscar dados no SGP: ${errSgp.message}`);
+                        }
+
+                        if (testPhoneOverride && messagesSentCount >= 3) {
+                            logStep(`[TESTE] Fim do teste para o cliente (limite atingido).`);
+                            break;
+                        }
+
+                        continue;
+                    }
+
                     const days = msg.days_from_due;
                     let filterType = '';
                     

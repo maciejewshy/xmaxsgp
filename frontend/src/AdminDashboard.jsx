@@ -177,6 +177,7 @@ function AdminDashboard({ user, onLogout }) {
 
   // Funções para mensagens de disparo
   const [msgFormData, setMsgFormData] = useState({
+    trigger_type: 'due_date',
     message_type: 'unofficial',
     message_template: '',
     template_id: '',
@@ -188,10 +189,18 @@ function AdminDashboard({ user, onLogout }) {
 
   const handleMsgInputChange = (e) => {
     const { name, value } = e.target;
-    setMsgFormData({ 
-      ...msgFormData, 
+    if (name === 'trigger_type') {
+      setMsgFormData(prev => ({
+        ...prev,
+        trigger_type: value,
+        days_from_due: value === 'birthday' ? 0 : prev.days_from_due
+      }));
+      return;
+    }
+    setMsgFormData(prev => ({ 
+      ...prev, 
       [name]: name === 'open_new_chat' ? parseInt(value) : value 
-    });
+    }));
   };
 
   const fetchMessages = async (clientId) => {
@@ -217,7 +226,7 @@ function AdminDashboard({ user, onLogout }) {
       } else {
         await axios.post(`${MSG_API_URL}/clients/${selectedClient.id}/messages`, msgFormData);
       }
-      setMsgFormData({ message_type: 'unofficial', message_template: '', template_id: '', template_data: '', days_from_due: 0, queue_id: '', queue_api_key: '', open_new_chat: 1 });
+      setMsgFormData({ trigger_type: 'due_date', message_type: 'unofficial', message_template: '', template_id: '', template_data: '', days_from_due: 0, queue_id: '', queue_api_key: '', open_new_chat: 1 });
       setEditingMsgId(null);
       fetchMessages(selectedClient.id);
     } catch (error) {
@@ -228,6 +237,7 @@ function AdminDashboard({ user, onLogout }) {
   const handleMsgEdit = (msg) => {
     setMsgFormData({
       ...msg,
+      trigger_type: msg.trigger_type || 'due_date',
       message_type: msg.message_type || 'unofficial',
       template_id: msg.template_id || '',
       template_data: msg.template_data || '',
@@ -248,7 +258,7 @@ function AdminDashboard({ user, onLogout }) {
   };
 
   const cancelMsgEdit = () => {
-    setMsgFormData({ message_type: 'unofficial', message_template: '', template_id: '', template_data: '', days_from_due: 0, queue_id: '', queue_api_key: '' });
+    setMsgFormData({ trigger_type: 'due_date', message_type: 'unofficial', message_template: '', template_id: '', template_data: '', days_from_due: 0, queue_id: '', queue_api_key: '' });
     setEditingMsgId(null);
   };
 
@@ -576,6 +586,13 @@ function AdminDashboard({ user, onLogout }) {
                   
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                     <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label style={{ fontWeight: 600 }}>Tipo de Regra:</label>
+                      <select name="trigger_type" value={msgFormData.trigger_type || 'due_date'} onChange={handleMsgInputChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #d1d5db' }}>
+                        <option value="due_date">Cobrança (Vencimento)</option>
+                        <option value="birthday">Aniversário</option>
+                      </select>
+                    </div>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
                       <label style={{ fontWeight: 600 }}>Tipo de Mensagem:</label>
                       <select name="message_type" value={msgFormData.message_type} onChange={handleMsgInputChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #d1d5db' }}>
                         <option value="unofficial">Não Oficial (Texto Livre)</option>
@@ -608,9 +625,9 @@ function AdminDashboard({ user, onLogout }) {
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                       <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label style={{ fontWeight: 600 }}>Dias de Vencimento:</label>
-                        <input type="number" name="days_from_due" value={msgFormData.days_from_due} onChange={handleMsgInputChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #d1d5db' }} required />
-                        <small style={{color: '#6b7280', fontSize: '11px', display: 'block', marginTop: '4px'}}>-5 (Antes), 0 (Hoje), 3 (Depois)</small>
+                        <label style={{ fontWeight: 600 }}>{msgFormData.trigger_type === 'birthday' ? 'Dias de Vencimento (não usado)' : 'Dias de Vencimento:'}</label>
+                        <input type="number" name="days_from_due" value={msgFormData.days_from_due} onChange={handleMsgInputChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #d1d5db' }} required disabled={msgFormData.trigger_type === 'birthday'} />
+                        <small style={{color: '#6b7280', fontSize: '11px', display: 'block', marginTop: '4px'}}>{msgFormData.trigger_type === 'birthday' ? 'Dispara no dia do aniversário do cliente no SGP' : '-5 (Antes), 0 (Hoje), 3 (Depois)'}</small>
                       </div>
                       <div className="form-group" style={{ marginBottom: 0 }}>
                         <label style={{ fontWeight: 600 }}>Abrir Novo Chat?</label>
@@ -655,7 +672,7 @@ function AdminDashboard({ user, onLogout }) {
                       <tr>
                         <th>Mensagem/Template</th>
                         <th style={{ width: '60px', textAlign: 'center' }}>Dias</th>
-                        <th style={{ width: '120px' }}>Status Fatura</th>
+                        <th style={{ width: '120px' }}>Tipo</th>
                         <th style={{ width: '60px', textAlign: 'center' }}>Fila</th>
                         <th style={{ width: '80px', textAlign: 'center' }}>Ações</th>
                       </tr>
@@ -680,10 +697,10 @@ function AdminDashboard({ user, onLogout }) {
                                 borderRadius: '999px', 
                                 fontSize: '0.75rem', 
                                 fontWeight: 500,
-                                backgroundColor: msg.days_from_due < 0 ? '#fef3c7' : msg.days_from_due === 0 ? '#dbeafe' : '#fee2e2',
-                                color: msg.days_from_due < 0 ? '#92400e' : msg.days_from_due === 0 ? '#1e40af' : '#991b1b'
+                                background: (msg.trigger_type || 'due_date') === 'birthday' ? '#dcfce7' : msg.days_from_due < 0 ? '#dbeafe' : msg.days_from_due === 0 ? '#fef3c7' : '#fee2e2',
+                                color: (msg.trigger_type || 'due_date') === 'birthday' ? '#166534' : msg.days_from_due < 0 ? '#1d4ed8' : msg.days_from_due === 0 ? '#b45309' : '#b91c1c'
                               }}>
-                                {msg.days_from_due < 0 ? 'A Vencer' : msg.days_from_due === 0 ? 'Vencendo Hoje' : 'Vencida'}
+                                {(msg.trigger_type || 'due_date') === 'birthday' ? 'Aniversário' : msg.days_from_due < 0 ? 'A Vencer' : msg.days_from_due === 0 ? 'Vencendo Hoje' : 'Vencida'}
                               </span>
                             </td>
                             <td style={{ textAlign: 'center' }}>{msg.queue_id}</td>

@@ -31,8 +31,10 @@ const db = new sqlite3.Database(dbPath, (err) => {
         db.run('ALTER TABLE dispatch_messages ADD COLUMN template_id TEXT', (err) => {});
         db.run('ALTER TABLE dispatch_messages ADD COLUMN template_data TEXT', (err) => {});
         db.run('ALTER TABLE dispatch_messages ADD COLUMN open_new_chat INTEGER DEFAULT 1', (err) => {});
+        db.run("ALTER TABLE dispatch_messages ADD COLUMN trigger_type TEXT DEFAULT 'due_date'", (err) => {});
         db.run("UPDATE clients SET dispatch_days = '1,2,3,4,5' WHERE dispatch_days IS NULL OR dispatch_days = ''", (err) => {});
         db.run("UPDATE clients SET dispatch_start_time = '08:00' WHERE dispatch_start_time IS NULL OR dispatch_start_time = ''", (err) => {});
+        db.run("UPDATE dispatch_messages SET trigger_type = 'due_date' WHERE trigger_type IS NULL OR trigger_type = ''", (err) => {});
 
         db.run(`
             CREATE TABLE IF NOT EXISTS dispatch_messages (
@@ -45,6 +47,29 @@ const db = new sqlite3.Database(dbPath, (err) => {
                 FOREIGN KEY (client_id) REFERENCES clients(id)
             )
         `);
+        db.all("PRAGMA table_info(dispatch_messages)", (err, columns) => {
+            if (!err && columns) {
+                const colNames = columns.map(c => c.name);
+                if (!colNames.includes('queue_api_key')) {
+                    db.run("ALTER TABLE dispatch_messages ADD COLUMN queue_api_key TEXT");
+                }
+                if (!colNames.includes('message_type')) {
+                    db.run("ALTER TABLE dispatch_messages ADD COLUMN message_type TEXT DEFAULT 'unofficial'");
+                }
+                if (!colNames.includes('template_id')) {
+                    db.run("ALTER TABLE dispatch_messages ADD COLUMN template_id TEXT");
+                }
+                if (!colNames.includes('template_data')) {
+                    db.run("ALTER TABLE dispatch_messages ADD COLUMN template_data TEXT");
+                }
+                if (!colNames.includes('open_new_chat')) {
+                    db.run("ALTER TABLE dispatch_messages ADD COLUMN open_new_chat INTEGER DEFAULT 1");
+                }
+                if (!colNames.includes('trigger_type')) {
+                    db.run("ALTER TABLE dispatch_messages ADD COLUMN trigger_type TEXT DEFAULT 'due_date'");
+                }
+            }
+        });
         db.run(`
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
