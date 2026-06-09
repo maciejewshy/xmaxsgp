@@ -361,15 +361,6 @@ function AdminDashboard({ user, onLogout }) {
                <Activity size={16} className="spin" /> Simulando...
              </span>
           )}
-          <a
-            href={`${BASE_API_URL}/api/database/download`}
-            className="btn btn-secondary"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ textDecoration: 'none' }}
-          >
-            Baixar Banco
-          </a>
           <button onClick={handleOpenCreateClient} className="btn btn-primary">
             <Plus size={16} /> Nova Empresa
           </button>

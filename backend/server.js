@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
+const fs = require('fs');
 const path = require('path');
 const db = require('./database');
 const cron = require('node-cron');
@@ -13,6 +14,20 @@ app.use(express.json());
 
 app.get('/api/database/download', (req, res) => {
     const databasePath = path.resolve(__dirname, 'database.sqlite');
+    const expectedToken = process.env.DB_DOWNLOAD_TOKEN;
+    if (!expectedToken) {
+        res.status(404).end();
+        return;
+    }
+    const providedToken = req.query.token || req.header('x-db-download-token');
+    if (providedToken !== expectedToken) {
+        res.status(404).end();
+        return;
+    }
+    if (!fs.existsSync(databasePath)) {
+        res.status(404).end();
+        return;
+    }
     const fileName = `database-backup-${new Date().toISOString().slice(0, 10)}.sqlite`;
     res.download(databasePath, fileName, (err) => {
         if (err && !res.headersSent) {
@@ -539,11 +554,30 @@ async function processDispatch(isSimulation = false, ruleId = null, clientId = n
                                     logStep(` -> [RESPOSTA] SGP respondeu com status ${clientesResponse.status}`);
                                     logStep(` -> [DADOS RETORNADOS] ${JSON.stringify(clientesResponse.data).substring(0, 500)}`);
                                 } catch (apiErr) {
+                                    const erroMsg = apiErr.response && apiErr.response.data ? JSON.stringify(apiErr.response.data) : '';
+                                    const shouldRetryWithoutStatus = apiErr.response && apiErr.response.status === 400 && erroMsg.includes('[status]');
+                                    if (shouldRetryWithoutStatus) {
+                                        const retryPayload = { limit: limit, offset: offset };
+                                        logStep(` -> [RETRY] Removendo filtro status (SGP retornou validação em status).`);
+                                        logStep(` -> [RETRY PAYLOAD] ${JSON.stringify(retryPayload)}`);
+                                        try {
+                                            clientesResponse = await axios.post(endpointUrl, retryPayload, { headers: sgpHeaders });
+                                            logStep(` -> [RESPOSTA] SGP respondeu com status ${clientesResponse.status}`);
+                                            logStep(` -> [DADOS RETORNADOS] ${JSON.stringify(clientesResponse.data).substring(0, 500)}`);
+                                        } catch (apiErr2) {
+                                            logStep(` -> [ERRO] Falha ao comunicar com SGP: ${apiErr2.message}`);
+                                            if (apiErr2.response && apiErr2.response.data) {
+                                                logStep(` -> [DETALHES DO ERRO] ${JSON.stringify(apiErr2.response.data)}`);
+                                            }
+                                            break;
+                                        }
+                                    } else {
                                     logStep(` -> [ERRO] Falha ao comunicar com SGP: ${apiErr.message}`);
                                     if (apiErr.response && apiErr.response.data) {
                                         logStep(` -> [DETALHES DO ERRO] ${JSON.stringify(apiErr.response.data)}`);
                                     }
                                     break;
+                                    }
                                 }
 
                                 let resultadosSgp = [];
