@@ -533,11 +533,7 @@ async function processDispatch(isSimulation = false, ruleId = null, clientId = n
                             let temMaisDados = true;
 
                             while (temMaisDados) {
-                                const sgpPayload = {
-                                    status: 'ativo',
-                                    limit: limit,
-                                    offset: offset
-                                };
+                                const sgpPayload = { limit: limit, offset: offset };
 
                                 const endpointUrl = `${sgpUrl}/api/ura/clientes/`;
                                 logStep(` -> [API] Fazendo POST para: ${endpointUrl}`);
@@ -554,30 +550,11 @@ async function processDispatch(isSimulation = false, ruleId = null, clientId = n
                                     logStep(` -> [RESPOSTA] SGP respondeu com status ${clientesResponse.status}`);
                                     logStep(` -> [DADOS RETORNADOS] ${JSON.stringify(clientesResponse.data).substring(0, 500)}`);
                                 } catch (apiErr) {
-                                    const erroMsg = apiErr.response && apiErr.response.data ? JSON.stringify(apiErr.response.data) : '';
-                                    const shouldRetryWithoutStatus = apiErr.response && apiErr.response.status === 400 && erroMsg.includes('[status]');
-                                    if (shouldRetryWithoutStatus) {
-                                        const retryPayload = { limit: limit, offset: offset };
-                                        logStep(` -> [RETRY] Removendo filtro status (SGP retornou validação em status).`);
-                                        logStep(` -> [RETRY PAYLOAD] ${JSON.stringify(retryPayload)}`);
-                                        try {
-                                            clientesResponse = await axios.post(endpointUrl, retryPayload, { headers: sgpHeaders });
-                                            logStep(` -> [RESPOSTA] SGP respondeu com status ${clientesResponse.status}`);
-                                            logStep(` -> [DADOS RETORNADOS] ${JSON.stringify(clientesResponse.data).substring(0, 500)}`);
-                                        } catch (apiErr2) {
-                                            logStep(` -> [ERRO] Falha ao comunicar com SGP: ${apiErr2.message}`);
-                                            if (apiErr2.response && apiErr2.response.data) {
-                                                logStep(` -> [DETALHES DO ERRO] ${JSON.stringify(apiErr2.response.data)}`);
-                                            }
-                                            break;
-                                        }
-                                    } else {
                                     logStep(` -> [ERRO] Falha ao comunicar com SGP: ${apiErr.message}`);
                                     if (apiErr.response && apiErr.response.data) {
                                         logStep(` -> [DETALHES DO ERRO] ${JSON.stringify(apiErr.response.data)}`);
                                     }
                                     break;
-                                    }
                                 }
 
                                 let resultadosSgp = [];
